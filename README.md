@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend (Next.js + shadcn)
+
+This directory hosts the Next.js App Router frontend for ZJU Charger. The UI mirrors the old React/Vite Leaflet page but is rebuilt with modern tooling:
+
+- **Framework**: Next.js 16 (App Router, TypeScript, pnpm).
+- **UI Layer**: shadcn/ui + Tailwind CSS + Supabase theme, Lucide icons.
+- **Visualization**: Apache ECharts 5 + `echarts-extension-amap` for the Gaode basemap.
+- **State/Utilities**: React hooks (watchlist, auto-refresh, realtime location), custom geo/time helpers.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.local.example .env.local  # create if missing
+echo "NEXT_PUBLIC_AMAP_KEY=<your-amap-key>" >> .env.local
+# optionally NEXT_PUBLIC_API_BASE=https://your-api-domain
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000> to view the app. All main components live under `src/components` and `src/hooks`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build & Deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Static build / self hosting**
+  ```bash
+  pnpm build
+  pnpm start   # serves the production build via Next.js server
+  ```
+- **Vercel**: connect the repo, set build command `pnpm build`, output `.next`, and configure env vars (`NEXT_PUBLIC_AMAP_KEY`, `NEXT_PUBLIC_API_BASE`). Enable “Git submodules” if deploying from the root repo.
+- **Cloudflare Pages**:
+  - Pure static export: `pnpm next build && pnpm next export` with output `out/`.
+  - SSR/Edge: install `@cloudflare/next-on-pages`, add `pnpm run cf:build` and use `.vercel/output/static` as the output directory.
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+- `NEXT_PUBLIC_AMAP_KEY` (required): Gaode Web JS SDK key. Without it the map will show an error banner.
+- `NEXT_PUBLIC_API_BASE` (optional): API origin for FastAPI backend. Leave empty when frontend and backend share the same domain.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+All variables with `NEXT_PUBLIC_` prefix are exposed to the browser and must be set per environment (`.env.local`, `.env.production`, or deployment dashboards).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Tech Stack Summary
 
-## Deploy on Vercel
+- Next.js 16, TypeScript, pnpm
+- shadcn/ui (Supabase preset), Tailwind CSS, Lucide icons
+- Apache ECharts + `echarts-extension-amap`
+- React hooks for watchlist, providers, auto-refresh, realtime geolocation (via `navigator.geolocation.watchPosition`)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+PRs and customizations should live in this folder when the frontend is used as a submodule. Remember to run `pnpm lint` (Biome) before committing.
