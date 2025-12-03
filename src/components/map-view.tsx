@@ -299,15 +299,46 @@ export function MapView({
 
   useEffect(() => {
     if (!chart) return;
-    const handler = (params: CallbackDataParams) => {
+    let longPressTimer: number | null = null;
+
+    const navTargetFromParams = (params: CallbackDataParams) => {
       const point = params as TooltipParams;
       if (point.data?.station) {
         setNavTarget(point.data.station);
       }
     };
-    chart.on("dblclick", handler);
+
+    const startLongPress = (params: CallbackDataParams) => {
+      const point = params as TooltipParams;
+      const station = point.data?.station;
+      if (!station) return;
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+      }
+      longPressTimer = window.setTimeout(() => {
+        setNavTarget(station);
+        longPressTimer = null;
+      }, 600);
+    };
+
+    const cancelLongPress = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    chart.on("dblclick", navTargetFromParams);
+    chart.on("mousedown", startLongPress);
+    chart.on("mouseup", cancelLongPress);
+    chart.on("globalout", cancelLongPress);
+
     return () => {
-      chart.off("dblclick", handler);
+      cancelLongPress();
+      chart.off("dblclick", navTargetFromParams);
+      chart.off("mousedown", startLongPress);
+      chart.off("mouseup", cancelLongPress);
+      chart.off("globalout", cancelLongPress);
     };
   }, [chart]);
 
