@@ -85,6 +85,17 @@ function getStationColor(
   return palette.free;
 }
 
+function createUserMarkerElement() {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const element = document.createElement("div");
+  element.className = "user-location-marker";
+  element.setAttribute("aria-hidden", "true");
+  element.setAttribute("role", "presentation");
+  return element;
+}
+
 export function MapView({
   stations,
   campusId,
@@ -105,6 +116,8 @@ export function MapView({
     useState<StationRecord | null>(null);
   const [isSwitchingNav, setIsSwitchingNav] = useState(false);
   const userMarkerRef = useRef<AMapMarker | null>(null);
+  const userMarkerElementRef = useRef<HTMLDivElement | null>(null);
+  const [mapRenderKey, setMapRenderKey] = useState(0);
   const navSwitchTimerRef = useRef<number | null>(null);
   const palette = useMemo(
     () => (theme === "dark" ? DARK_PALETTE : LIGHT_PALETTE),
@@ -411,6 +424,7 @@ export function MapView({
     };
 
     chart.setOption(option, true);
+    setMapRenderKey((value) => value + 1);
   }, [chart, dataPoints, campusId, amapReady, theme, palette]);
 
   const gaodeNavOption = navTarget
@@ -441,6 +455,7 @@ export function MapView({
       if (amap && userMarkerRef.current) {
         amap.remove(userMarkerRef.current);
         userMarkerRef.current = null;
+        userMarkerElementRef.current = null;
       }
     };
   }, [getAmap]);
@@ -550,24 +565,45 @@ export function MapView({
     if (!amap) return;
     const MarkerCtor = window.AMap?.Marker;
     if (!MarkerCtor) return;
+    void mapRenderKey;
 
-    if (userLocation) {
-      if (!userMarkerRef.current) {
-        userMarkerRef.current = new MarkerCtor({
-          position: [userLocation.longitude, userLocation.latitude],
-          bubble: true,
-        });
-        amap.add(userMarkerRef.current);
+    if (!tracking || !userLocation) {
+      if (userMarkerRef.current) {
+        amap.remove(userMarkerRef.current);
+        userMarkerRef.current = null;
+        userMarkerElementRef.current = null;
       }
-      userMarkerRef.current?.setPosition?.([
-        userLocation.longitude,
-        userLocation.latitude,
-      ]);
-    } else if (userMarkerRef.current) {
-      amap.remove(userMarkerRef.current);
-      userMarkerRef.current = null;
+      return;
     }
-  }, [userLocation, getAmap]);
+
+    if (!userMarkerRef.current) {
+      const markerElement =
+        userMarkerElementRef.current ?? createUserMarkerElement();
+      if (!markerElement) return;
+      userMarkerElementRef.current = markerElement;
+      userMarkerRef.current = new MarkerCtor({
+        position: [userLocation.longitude, userLocation.latitude],
+        bubble: true,
+        content: markerElement,
+      });
+    } else if (!userMarkerElementRef.current) {
+      const markerElement = createUserMarkerElement();
+      if (markerElement) {
+        userMarkerElementRef.current = markerElement;
+        userMarkerRef.current.setContent?.(markerElement);
+      }
+    }
+
+    userMarkerRef.current?.setPosition?.([
+      userLocation.longitude,
+      userLocation.latitude,
+    ]);
+    if (userMarkerRef.current?.setMap) {
+      userMarkerRef.current.setMap(amap);
+    } else {
+      amap.add(userMarkerRef.current);
+    }
+  }, [userLocation, tracking, getAmap, mapRenderKey]);
 
   if (!amapKey) {
     return (
@@ -580,12 +616,13 @@ export function MapView({
   return (
     <div className="relative h-full w-full min-h-[360px]">
       <div ref={containerRef} className="absolute inset-0" />
-      <div className="absolute top-4 right-4 flex flex-col items-end gap-3">
+      <div className="absolute bottom-4 right-4">
         <Button
           size="sm"
           variant={tracking ? "default" : "secondary"}
           onClick={tracking ? onStopTracking : onStartTracking}
           className={cn(
+            "shadow-lg",
             !tracking && trackingHighlight
               ? "ring-2 ring-emerald-400/70 ring-offset-2 animate-pulse"
               : undefined,
@@ -593,60 +630,58 @@ export function MapView({
         >
           {tracking ? "停止实时定位" : "开启实时定位"}
         </Button>
-        {navTarget && (
-          <div className="w-72 rounded-2xl border bg-card p-4 shadow-xl transition duration-200 ease-out">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold" aria-live="polite">
-                  {isSwitchingNav
-                    ? "正在切换导航..."
-                    : `导航到 ${navTarget.name}`}
+      </div>
+      {navTarget && (
+        <div className="absolute top-4 right-4 w-72 rounded-2xl border bg-card p-4 shadow-xl transition duration-200 ease-out">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold" aria-live="polite">
+                {isSwitchingNav ? "正在切换导航..." : `导航到 ${navTarget.name}`}
+              </p>
+              {isSwitchingNav && pendingNavTarget ? (
+                <p className="text-xs text-emerald-500">
+                  切换至 {pendingNavTarget.name}
                 </p>
-                {isSwitchingNav && pendingNavTarget ? (
-                  <p className="text-xs text-emerald-500">
-                    切换至 {pendingNavTarget.name}
-                  </p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-emerald-500 shadow-sm transition hover:bg-emerald-100 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:bg-emerald-400/15 dark:text-emerald-200"
-                onClick={() => {
-                  cancelNavTransition();
-                  setNavTarget(null);
-                }}
-                aria-label="关闭导航面板"
-              >
-                <span className="text-lg leading-none">×</span>
-              </button>
-            </div>
-            <div className="flex flex-col gap-2 text-sm">
-              <Button
-                onClick={() =>
-                  gaodeNavOption &&
-                  attemptOpen(gaodeNavOption.primary, gaodeNavOption.fallback)
-                }
-              >
-                高德地图导航
-              </Button>
-              {systemNavOption ? (
-                <Button
-                  variant="secondary"
-                  className="border border-slate-300/70 bg-white/90 text-slate-900 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-                  onClick={() =>
-                    attemptOpen(
-                      systemNavOption.primary,
-                      systemNavOption.fallback,
-                    )
-                  }
-                >
-                  系统导航
-                </Button>
               ) : null}
             </div>
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-emerald-500 shadow-sm transition hover:bg-emerald-100 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:bg-emerald-400/15 dark:text-emerald-200"
+              onClick={() => {
+                cancelNavTransition();
+                setNavTarget(null);
+              }}
+              aria-label="关闭导航面板"
+            >
+              <span className="text-lg leading-none">×</span>
+            </button>
           </div>
-        )}
-      </div>
+          <div className="flex flex-col gap-2 text-sm">
+            <Button
+              onClick={() =>
+                gaodeNavOption &&
+                attemptOpen(gaodeNavOption.primary, gaodeNavOption.fallback)
+              }
+            >
+              高德地图导航
+            </Button>
+            {systemNavOption ? (
+              <Button
+                variant="secondary"
+                className="border border-slate-300/70 bg-white/90 text-slate-900 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                onClick={() =>
+                  attemptOpen(
+                    systemNavOption.primary,
+                    systemNavOption.fallback,
+                  )
+                }
+              >
+                系统导航
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,11 +2,13 @@ export interface AMapMarkerOptions {
   position: [number, number];
   bubble?: boolean;
   offset?: unknown;
+  content?: string | HTMLElement;
 }
 
 export interface AMapMarker {
   setMap?: (map: unknown) => void;
   setPosition?: (position: [number, number]) => void;
+  setContent?: (content: string | HTMLElement) => void;
 }
 
 export interface AMapMap {

@@ -1,15 +1,11 @@
 "use client";
 
-import { ArrowUpDown, Filter } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { HeaderBar } from "@/components/header-bar";
 import { MapView } from "@/components/map-view";
-import { NightNotice } from "@/components/night-notice";
-import { ProviderSelect } from "@/components/provider-select";
 import { RateLimitToast } from "@/components/rate-limit-toast";
-import { SortSelect } from "@/components/sort-select";
-import { StationList } from "@/components/station-list";
+import { StationPanel } from "@/components/station-panel";
 import { SummaryGrid } from "@/components/summary-grid";
 import { Card } from "@/components/ui/card";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
@@ -22,14 +18,16 @@ import { useWatchlist } from "@/hooks/use-watchlist";
 import { useWindowSize } from "@/hooks/use-window-size";
 import { CAMPUS_LIST } from "@/lib/config";
 import { distanceBetween } from "@/lib/geo";
-import type { SortMode } from "@/types/sort";
 import type { CampusId, StationRecord } from "@/types/station";
 
 const DEFAULT_SHORT_SCREEN_CARD_COUNT = 3;
 const DEFAULT_SHORT_SCREEN_HEIGHT = 700;
 const DESKTOP_BREAKPOINT = 1024;
+const DESKTOP_PANEL_MIN_HEIGHT = 420;
 const MOBILE_MAP_HEIGHT_RATIO = 0.4;
 const MOBILE_MAP_MIN_HEIGHT = 280;
+const DESKTOP_SECTION_GAP = 24;
+const MOBILE_SECTION_GAP = 16;
 
 function readPositiveNumber(value: string | undefined, fallback: number) {
   const parsed = Number(value);
@@ -61,15 +59,13 @@ export default function HomePage() {
   );
   const refreshInterval = useConfig();
   const [focusStation, setFocusStation] = useState<StationRecord | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>("free");
   const [trackingHighlight, setTrackingHighlight] = useState(false);
   const trackingHighlightTimer = useRef<number | null>(null);
-  const {
-    point: userLocation,
-    watching,
-    start,
-    stop,
-  } = useRealtimeLocation({
+  const headerSectionRef = useRef<HTMLDivElement | null>(null);
+  const summarySectionRef = useRef<HTMLDivElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
+  const [chromeHeight, setChromeHeight] = useState(0);
+  const { point: userLocation, watching, start, stop } = useRealtimeLocation({
     onError: (message) => toast.error(message),
   });
 
@@ -99,34 +95,37 @@ export default function HomePage() {
   );
 
   useEffect(() => {
+    start();
+  }, [start]);
+
+  useEffect(() => {
+    if (autoSelectionDone || !userLocation) return;
+    let nearest = CAMPUS_LIST[0];
+    let minDist = Number.POSITIVE_INFINITY;
+    CAMPUS_LIST.forEach((campus) => {
+      const [lng, lat] = campus.center;
+      const dist = distanceBetween(
+        userLocation.longitude,
+        userLocation.latitude,
+        lng,
+        lat,
+      );
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = campus;
+      }
+    });
+    setCampusId(nearest.id);
+    setAutoSelectionDone(true);
+  }, [autoSelectionDone, userLocation]);
+
+  useEffect(() => {
     if (autoSelectionDone) return;
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
+    const timer = window.setTimeout(() => {
       setCampusId("1");
       setAutoSelectionDone(true);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { longitude, latitude } = position.coords;
-        let nearest = CAMPUS_LIST[0];
-        let minDist = Number.POSITIVE_INFINITY;
-        CAMPUS_LIST.forEach((campus) => {
-          const [lng, lat] = campus.center;
-          const dist = distanceBetween(longitude, latitude, lng, lat);
-          if (dist < minDist) {
-            minDist = dist;
-            nearest = campus;
-          }
-        });
-        setCampusId(nearest.id);
-        setAutoSelectionDone(true);
-      },
-      () => {
-        setCampusId("1");
-        setAutoSelectionDone(true);
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+    }, 8000);
+    return () => window.clearTimeout(timer);
   }, [autoSelectionDone]);
 
   const isDesktopWidth =
@@ -146,6 +145,42 @@ export default function HomePage() {
           MOBILE_MAP_MIN_HEIGHT,
         )
       : MOBILE_MAP_MIN_HEIGHT;
+  const desktopPanelHeight =
+    windowHeight > 0
+      ? Math.max(Math.floor(windowHeight - chromeHeight), DESKTOP_PANEL_MIN_HEIGHT)
+      : DESKTOP_PANEL_MIN_HEIGHT;
+
+  const updateChromeHeight = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const headerHeight = headerSectionRef.current?.offsetHeight ?? 0;
+    const summaryHeight = summarySectionRef.current?.offsetHeight ?? 0;
+    const padding =
+      mainRef.current && window.getComputedStyle
+        ? (() => {
+            const style = window.getComputedStyle(mainRef.current);
+            const top = parseFloat(style.paddingTop) || 0;
+            const bottom = parseFloat(style.paddingBottom) || 0;
+            return top + bottom;
+          })()
+        : 0;
+    const gap =
+      (windowWidth >= DESKTOP_BREAKPOINT ? DESKTOP_SECTION_GAP : MOBILE_SECTION_GAP) *
+      2;
+    setChromeHeight(headerHeight + summaryHeight + padding + gap);
+  }, [windowWidth]);
+
+  useEffect(() => {
+    updateChromeHeight();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateChromeHeight);
+      return () => window.removeEventListener("resize", updateChromeHeight);
+    }
+    const observer = new ResizeObserver(() => updateChromeHeight());
+    if (headerSectionRef.current) observer.observe(headerSectionRef.current);
+    if (summarySectionRef.current) observer.observe(summarySectionRef.current);
+    if (mainRef.current) observer.observe(mainRef.current);
+    return () => observer.disconnect();
+  }, [updateChromeHeight]);
 
   useEffect(() => {
     return () => {
@@ -166,12 +201,7 @@ export default function HomePage() {
     }
   }, [userLocation, trackingHighlight]);
 
-  const handleSortChange = useCallback((mode: SortMode) => {
-    setSortMode(mode);
-  }, []);
-
-  const handleRequireLocation = useCallback(() => {
-    toast.info("开启实时定位后才能按距离排序");
+  const triggerTrackingHighlight = useCallback(() => {
     setTrackingHighlight(true);
     if (trackingHighlightTimer.current) {
       window.clearTimeout(trackingHighlightTimer.current);
@@ -182,20 +212,17 @@ export default function HomePage() {
     }, 1600);
   }, []);
 
-  useEffect(() => {
-    if (sortMode === "distance" && !userLocation) {
-      setSortMode("free");
-    }
-  }, [sortMode, userLocation]);
-
   return (
     <div className="flex min-h-screen flex-col bg-background lg:h-screen lg:overflow-hidden">
       <RateLimitToast
         visible={stationsState.rateLimited}
         message={stationsState.error}
       />
-      <main className="mx-auto flex w-full max-w-7xl flex-1 min-h-0 flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 lg:py-6 lg:overflow-hidden">
-        <div className="shrink-0">
+      <main
+        ref={mainRef}
+        className="mx-auto flex w-full max-w-7xl flex-1 min-h-0 flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8 lg:py-6 lg:overflow-hidden"
+      >
+        <div ref={headerSectionRef} className="shrink-0">
           <HeaderBar
             lastUpdated={stationsState.updatedAt}
             onToggleTheme={toggleTheme}
@@ -203,69 +230,40 @@ export default function HomePage() {
           />
         </div>
 
-        <Card className="shrink-0 rounded-2xl border bg-card p-4 shadow-sm">
-          <SummaryGrid
-            summary={stationsState.summary}
-            selectedCampusId={campusId}
-            onSelectCampus={handleCampusSelect}
-          />
-        </Card>
+        <div ref={summarySectionRef} className="shrink-0">
+          <Card className="rounded-2xl border bg-card p-4 shadow-sm">
+            <SummaryGrid
+              summary={stationsState.summary}
+              selectedCampusId={campusId}
+              onSelectCampus={handleCampusSelect}
+            />
+          </Card>
+        </div>
 
         <div className="flex flex-1 min-h-0 flex-col gap-4 lg:grid lg:auto-rows-[minmax(0,1fr)] lg:grid-cols-3 lg:gap-6">
-          <Card className="order-2 flex flex-1 min-h-0 flex-col rounded-2xl border bg-card p-4 shadow-sm lg:order-1 lg:h-full">
-            <div className="flex flex-col gap-4 border-b pb-5">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold">站点列表</h2>
-                <p className="text-xs text-muted-foreground">
-                  关注 {watchlistCount} 个站点
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 justify-between">
-                <div className="flex items-center gap-1">
-                  <Filter
-                    className="h-4 w-4 text-muted-foreground"
-                    aria-label="筛选"
-                  />
-                  <ProviderSelect
-                    providerId={providerId}
-                    providers={providers}
-                    onChange={setProviderId}
-                  />
-                </div>
-                <div className="flex items-center gap-1 justify-end ml-auto">
-                  <ArrowUpDown
-                    className="h-4 w-4 text-muted-foreground"
-                    aria-label="排序"
-                  />
-                  <SortSelect
-                    value={sortMode}
-                    onChange={handleSortChange}
-                    distanceEnabled={Boolean(userLocation)}
-                    onRequireLocation={handleRequireLocation}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="py-3">
-              <NightNotice />
-            </div>
-            <div className="relative flex-1 overflow-hidden min-h-0">
-              <StationList
-                stations={stationsState.campusStations}
-                loading={stationsState.loading}
-                error={stationsState.error}
-                isWatched={isWatched}
-                onToggleWatch={toggleWatch}
-                onSelectStation={handleStationSelect}
-                userLocation={userLocation}
-                sortMode={sortMode}
-                maxVisible={limitVisibleCards}
-              />
-            </div>
-          </Card>
+          <StationPanel
+            providers={providers}
+            providerId={providerId}
+            onProviderChange={setProviderId}
+            watchlistCount={watchlistCount}
+            stations={stationsState.campusStations}
+            loading={stationsState.loading}
+            error={stationsState.error}
+            isWatched={isWatched}
+            onToggleWatch={toggleWatch}
+            onSelectStation={handleStationSelect}
+            userLocation={userLocation}
+            maxVisible={limitVisibleCards}
+            onRequireLocation={triggerTrackingHighlight}
+            style={isDesktopWidth ? { height: desktopPanelHeight } : undefined}
+          />
           <Card
             className="order-1 flex min-h-[40vh] w-full flex-1 flex-col rounded-2xl border bg-card p-4 shadow-sm lg:order-2 lg:col-span-2 lg:min-h-0 lg:h-full lg:p-0"
-            style={isDesktopWidth ? undefined : { height: mobileMapHeight }}
+            style={
+              isDesktopWidth
+                ? { height: desktopPanelHeight }
+                : { height: mobileMapHeight }
+            }
           >
             <MapView
               stations={stationsState.mapStations}
@@ -281,7 +279,7 @@ export default function HomePage() {
           </Card>
         </div>
       </main>
-      <footer className="px-4 pb-4 text-center text-xs text-muted-foreground">
+      <footer className="shrink-0 px-4 pb-2 text-center text-xs text-muted-foreground">
         浙ICP备2025206156号 · 使用 GPLv3 协议开源
       </footer>
     </div>
