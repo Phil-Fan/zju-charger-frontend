@@ -264,7 +264,7 @@ export default function HomePage() {
             </div>
           </Card>
           <Card
-            className="order-1 flex min-h-[40vh] w-full max-w-[90vw] flex-1 flex-col self-center rounded-2xl border bg-card p-4 shadow-sm sm:max-w-none lg:order-2 lg:col-span-2 lg:min-h-0 lg:h-full lg:p-0"
+            className="order-1 flex min-h-[40vh] w-full flex-1 flex-col rounded-2xl border bg-card p-4 shadow-sm lg:order-2 lg:col-span-2 lg:min-h-0 lg:h-full lg:p-0"
             style={isDesktopWidth ? undefined : { height: mobileMapHeight }}
           >
             <MapView
