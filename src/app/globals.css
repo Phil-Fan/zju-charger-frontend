@@ -24,6 +24,7 @@
   --charger-free: #34d399;
   --charger-busy: #fb923c;
   --charger-error: #f87171;
+  --charger-exclusive: #9ca3af;
 }
 
 .dark {
@@ -49,6 +50,7 @@
   --charger-free: #34d399;
   --charger-busy: #fb923c;
   --charger-error: #f87171;
+  --charger-exclusive: #9ca3af;
 }
 
 body {

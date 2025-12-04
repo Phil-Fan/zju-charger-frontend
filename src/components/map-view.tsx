@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import type { GeoPoint } from "@/hooks/use-realtime-location";
 import { type AMapMap, type AMapMarker, loadAmap } from "@/lib/amap";
 import { AMAP_DEFAULT_CENTER, CAMPUS_MAP } from "@/lib/config";
+import { isSpecialStation, SPECIAL_STATION_COLORS } from "@/lib/station-style";
 import { cn } from "@/lib/utils";
 import type { CampusId, StationRecord } from "@/types/station";
 
@@ -67,18 +68,21 @@ const LIGHT_PALETTE = {
   free: "#22c55e",
   busy: "#f97316",
   error: "#f43f5e",
+  special: SPECIAL_STATION_COLORS.light,
 };
 
 const DARK_PALETTE = {
   free: "#4ade80",
   busy: "#fb923c",
   error: "#fb7185",
+  special: SPECIAL_STATION_COLORS.dark,
 };
 
 function getStationColor(
   station: StationRecord,
   palette: typeof LIGHT_PALETTE,
 ): string {
+  if (isSpecialStation(station)) return palette.special;
   if (station.error > 0) return palette.error;
   if (station.free === 0) return palette.error;
   if (station.free <= 3) return palette.busy;
@@ -636,7 +640,9 @@ export function MapView({
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold" aria-live="polite">
-                {isSwitchingNav ? "正在切换导航..." : `导航到 ${navTarget.name}`}
+                {isSwitchingNav
+                  ? "正在切换导航..."
+                  : `导航到 ${navTarget.name}`}
               </p>
               {isSwitchingNav && pendingNavTarget ? (
                 <p className="text-xs text-emerald-500">
@@ -670,10 +676,7 @@ export function MapView({
                 variant="secondary"
                 className="border border-slate-300/70 bg-white/90 text-slate-900 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                 onClick={() =>
-                  attemptOpen(
-                    systemNavOption.primary,
-                    systemNavOption.fallback,
-                  )
+                  attemptOpen(systemNavOption.primary, systemNavOption.fallback)
                 }
               >
                 系统导航

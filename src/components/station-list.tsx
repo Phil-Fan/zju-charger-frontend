@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { GeoPoint } from "@/hooks/use-realtime-location";
 import { distanceBetween } from "@/lib/geo";
+import { isSpecialStation } from "@/lib/station-style";
 import { cn } from "@/lib/utils";
 import type { SortMode } from "@/types/sort";
 import type { StationRecord } from "@/types/station";
@@ -37,6 +38,7 @@ function formatDistance(distance: number | null): string | null {
 }
 
 function availabilityClass(station: StationRecord): string {
+  if (isSpecialStation(station)) return "text-[var(--charger-exclusive)]";
   if (station.free > 0) return "text-[var(--charger-free)]";
   if (station.error > 0) return "text-[var(--charger-error)]";
   return "text-muted-foreground";
@@ -106,9 +108,14 @@ export function StationList({
 
     return meta;
   }, [stations, isWatched, userLocation, sortMode]);
+  const stationCount = stationMeta.length;
 
   useEffect(() => {
     if (!maxVisible) {
+      setLimitedHeight(null);
+      return;
+    }
+    if (stationCount === 0) {
       setLimitedHeight(null);
       return;
     }
@@ -147,7 +154,7 @@ export function StationList({
 
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [maxVisible, stationMeta.length]);
+  }, [maxVisible, stationCount]);
 
   const scrollStyle = limitedHeight
     ? { height: `${limitedHeight}px` }
@@ -180,15 +187,19 @@ export function StationList({
   return (
     <ScrollArea
       type="always"
-      className={cn(
-        "w-full min-h-0",
-        limitedHeight ? undefined : "h-full",
-      )}
+      className={cn("w-full min-h-0", limitedHeight ? undefined : "h-full")}
       style={scrollStyle}
     >
       <div ref={contentRef} className="flex flex-col gap-4 pr-4">
         {stationMeta.map(({ station, distance, watched }) => {
           const distanceLabel = formatDistance(distance);
+          const specialStation = isSpecialStation(station);
+          const providerBadgeClass = specialStation
+            ? "border-slate-200 text-[var(--charger-exclusive)] dark:border-slate-600 dark:text-[var(--charger-exclusive)]"
+            : "border-purple-200 text-purple-700 dark:border-purple-700 dark:text-purple-200";
+          const progressBarClass = specialStation
+            ? "h-full rounded-full bg-[var(--charger-exclusive)]"
+            : "h-full rounded-full bg-[var(--charger-free)]";
           return (
             <div key={station.hashId} className="relative">
               <button
@@ -222,10 +233,7 @@ export function StationList({
                     <Badge variant="outline">
                       {station.campusName || "未分配校区"}
                     </Badge>
-                    <Badge
-                      variant="outline"
-                      className="border-purple-200 text-purple-700 dark:border-purple-700 dark:text-purple-200"
-                    >
+                    <Badge variant="outline" className={providerBadgeClass}>
                       {station.provider}
                     </Badge>
                   </div>
@@ -248,7 +256,7 @@ export function StationList({
                 </div>
                 <div className="mt-3 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800">
                   <div
-                    className="h-full rounded-full bg-[var(--charger-free)]"
+                    className={progressBarClass}
                     style={{ width: progressWidth(station) }}
                   />
                 </div>
