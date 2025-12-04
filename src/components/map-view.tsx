@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import type { GeoPoint } from "@/hooks/use-realtime-location";
 import { type AMapMap, type AMapMarker, loadAmap } from "@/lib/amap";
 import { AMAP_DEFAULT_CENTER, CAMPUS_MAP } from "@/lib/config";
+import { cn } from "@/lib/utils";
 import type { CampusId, StationRecord } from "@/types/station";
 
 interface MapViewProps {
@@ -27,6 +28,7 @@ interface MapViewProps {
   tracking: boolean;
   onStartTracking: () => void;
   onStopTracking: () => void;
+  trackingHighlight?: boolean;
 }
 
 interface MapDataPoint {
@@ -48,15 +50,18 @@ const buildAmapWebUrl = (station: StationRecord) =>
 type Platform = "ios" | "android" | "mac" | "else";
 
 const detectPlatform = (): Platform => {
-  // 根据 UA 判断平台
   if (typeof navigator === "undefined") return "else";
   const ua = navigator.userAgent || "";
-  console.info("UA:", ua);
-  if (/Android/i.test(ua)) return "android"; // 安卓
-  if (/iPad|iPhone|iPod/i.test(ua)) return "ios"; // ios
-  if (/Macintosh|MacIntel/i.test(ua)) return "mac"; // 苹果电脑
-  return "else"; // 其他
+  if (/Android/i.test(ua)) return "android";
+  if (/iPad|iPhone|iPod/i.test(ua)) return "ios";
+  if (/Macintosh|MacIntel/i.test(ua)) return "mac";
+  return "else";
 };
+
+const buildAndroidGaodeIntent = (station: StationRecord) =>
+  `intent://navi?sourceApplication=ZJU+Charger&poiname=${encodeURIComponent(
+    station.name,
+  )}&lat=${station.latitude}&lon=${station.longitude}&dev=0&style=2#Intent;scheme=androidamap;package=com.autonavi.minimap;category=android.intent.category.DEFAULT;end`;
 
 const LIGHT_PALETTE = {
   free: "#22c55e",
@@ -89,6 +94,7 @@ export function MapView({
   tracking,
   onStartTracking,
   onStopTracking,
+  trackingHighlight = false,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [chart, setChart] = useState<echarts.ECharts | null>(null);
@@ -107,18 +113,16 @@ export function MapView({
   const platform = useMemo(detectPlatform, []);
 
   useEffect(() => {
-    console.info("Platform:", platform);
+    console.info(
+      "[ECharts][Extension][AMap] CAVEAT: The current map doesn't support `setLang` API! Platform:",
+      platform,
+    );
   }, [platform]);
 
   const formatCoord = useCallback(
     (station: StationRecord) => `${station.latitude},${station.longitude}`,
     [],
   );
-
-  const buildAndroidGaodeIntent = (station: StationRecord) => {
-    const encodedName = encodeURIComponent(station.name);
-    return `intent://navi?sourceApplication=ZJU+Charger&poiname=${encodedName}&lat=${station.latitude}&lon=${station.longitude}&dev=0&style=2#Intent;scheme=androidamap;package=com.autonavi.minimap;category=android.intent.category.DEFAULT;end`;
-  };
 
   const navigationConfig = useCallback(
     (station: StationRecord, type: "gaode" | "system") => {
@@ -133,10 +137,9 @@ export function MapView({
       const coord = formatCoord(station);
       if (type === "gaode") {
         if (platform === "ios") {
-          const url = `iosamap://navi?sourceApplication=ZJUCharger&poiname=${encodeURIComponent(
+          const url = `iosamap://navi?sourceApplication=ZJU+Charger&poiname=${encodeURIComponent(
             station.name,
-          )}&lat=${latitude}&lon=${longitude}&dev=0`;
-          console.info("URL:", url);
+          )}&lat=${latitude}&lon=${longitude}&dev=0&t=0`;
           return {
             primary: url,
             fallback: buildAmapWebUrl(station),
@@ -302,7 +305,6 @@ export function MapView({
         })),
     [stations],
   );
-
   useEffect(() => {
     if (!amapKey) return;
     let disposed = false;
@@ -578,65 +580,73 @@ export function MapView({
   return (
     <div className="relative h-full w-full min-h-[360px]">
       <div ref={containerRef} className="absolute inset-0" />
-      <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+      <div className="absolute top-4 right-4 flex flex-col items-end gap-3">
         <Button
           size="sm"
           variant={tracking ? "default" : "secondary"}
           onClick={tracking ? onStopTracking : onStartTracking}
+          className={cn(
+            !tracking && trackingHighlight
+              ? "ring-2 ring-emerald-400/70 ring-offset-2 animate-pulse"
+              : undefined,
+          )}
         >
           {tracking ? "停止实时定位" : "开启实时定位"}
         </Button>
-      </div>
-      {navTarget && (
-        <div className="absolute top-4 right-4 w-72 rounded-2xl border bg-card p-4 shadow-xl transition duration-200 ease-out">
-          <div className="mb-2 flex items-start justify-between gap-2">
-            <div>
-              <p className="text-sm font-semibold" aria-live="polite">
-                {isSwitchingNav
-                  ? "正在切换导航..."
-                  : `导航到 ${navTarget.name}`}
-              </p>
-              {isSwitchingNav && pendingNavTarget ? (
-                <p className="text-xs text-emerald-500">
-                  切换至 {pendingNavTarget.name}
+        {navTarget && (
+          <div className="w-72 rounded-2xl border bg-card p-4 shadow-xl transition duration-200 ease-out">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold" aria-live="polite">
+                  {isSwitchingNav
+                    ? "正在切换导航..."
+                    : `导航到 ${navTarget.name}`}
                 </p>
-              ) : null}
+                {isSwitchingNav && pendingNavTarget ? (
+                  <p className="text-xs text-emerald-500">
+                    切换至 {pendingNavTarget.name}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent bg-emerald-50 text-emerald-500 shadow-sm transition hover:bg-emerald-100 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:bg-emerald-400/15 dark:text-emerald-200"
+                onClick={() => {
+                  cancelNavTransition();
+                  setNavTarget(null);
+                }}
+                aria-label="关闭导航面板"
+              >
+                <span className="text-lg leading-none">×</span>
+              </button>
             </div>
-            <button
-              type="button"
-              className="h-9 w-9 rounded-xl border border-muted-foreground/40 bg-white/70 text-sm text-muted-foreground transition hover:border-emerald-400 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300"
-              onClick={() => {
-                cancelNavTransition();
-                setNavTarget(null);
-              }}
-              aria-label="关闭导航面板"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="flex flex-col gap-2 text-sm">
-            <Button
-              onClick={() =>
-                gaodeNavOption &&
-                attemptOpen(gaodeNavOption.primary, gaodeNavOption.fallback)
-              }
-            >
-              高德地图导航
-            </Button>
-            {systemNavOption ? (
+            <div className="flex flex-col gap-2 text-sm">
               <Button
-                variant="secondary"
-                className="border border-slate-300/70 bg-white/90 text-slate-900 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                 onClick={() =>
-                  attemptOpen(systemNavOption.primary, systemNavOption.fallback)
+                  gaodeNavOption &&
+                  attemptOpen(gaodeNavOption.primary, gaodeNavOption.fallback)
                 }
               >
-                系统导航
+                高德地图导航
               </Button>
-            ) : null}
+              {systemNavOption ? (
+                <Button
+                  variant="secondary"
+                  className="border border-slate-300/70 bg-white/90 text-slate-900 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                  onClick={() =>
+                    attemptOpen(
+                      systemNavOption.primary,
+                      systemNavOption.fallback,
+                    )
+                  }
+                >
+                  系统导航
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

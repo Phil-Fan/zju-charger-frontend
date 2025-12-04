@@ -22,7 +22,7 @@ export function ProviderSelect({
 }: ProviderSelectProps) {
   return (
     <Select value={providerId} onValueChange={onChange}>
-      <SelectTrigger className="w-[180px]">
+      <SelectTrigger className="w-[130px]">
         <SelectValue placeholder="全部服务商" />
       </SelectTrigger>
       <SelectContent>

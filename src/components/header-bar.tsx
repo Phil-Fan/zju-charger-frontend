@@ -2,18 +2,19 @@
 
 import { BookOpen, Github, Mail, Moon, Sun } from "lucide-react";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { STORAGE_KEYS } from "@/lib/config";
 import { formatTimestamp } from "@/lib/time";
 
 interface HeaderBarProps {
@@ -28,6 +29,31 @@ export function HeaderBar({
   theme,
 }: HeaderBarProps) {
   const [manualOpen, setManualOpen] = useState(false);
+  const [dontShowGuide, setDontShowGuide] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const suppressed = localStorage.getItem(STORAGE_KEYS.guideHidden) === "1";
+    setManualOpen(!suppressed);
+    setDontShowGuide(suppressed);
+  }, []);
+
+  const handleGuideToggle = (value: boolean) => {
+    setDontShowGuide(value);
+    if (typeof window === "undefined") return;
+    if (value) {
+      localStorage.setItem(STORAGE_KEYS.guideHidden, "1");
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.guideHidden);
+    }
+  };
+
+  const handleGuideConfirm = () => {
+    if (!dontShowGuide && typeof window !== "undefined") {
+      localStorage.removeItem(STORAGE_KEYS.guideHidden);
+    }
+    setManualOpen(false);
+  };
   return (
     <header className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -78,24 +104,41 @@ export function HeaderBar({
                   <BookOpen className="h-4 w-4" />
                 </Button>
               </DialogTrigger>
-              <DialogContent className="space-y-4" hideCloseButton>
+              <DialogContent
+                className="w-[92vw] max-w-md space-y-4 sm:max-w-lg"
+                hideCloseButton
+              >
                 <DialogHeader>
                   <DialogTitle>使用说明书</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3 text-sm text-muted-foreground">
                   <ol className="space-y-2 list-decimal pl-5">
-                    <li>点击校区卡片切换校区，点击服务商列表可以筛选服务商。</li>
-                    <li>长按或双击地图上到站点进入导航面板。</li>
-                    <li>站点列表点击星标关注站点。</li>
-                    <li>点击右上角按钮切换颜色模式。</li>
                     <li>
-                      点击 Safari 分享 - 添加到主屏幕可以将站点添加到桌面。
+                      校区卡片：点击<b>校区卡片</b>切换校区。
                     </li>
+                    <li>地图：<b>长按或双击</b>地图站点可选择导航。</li>
+                    <li>站点列表：
+                      <li>右上角按照服务商<b>筛选</b>并选择<b>排序方式</b>（距离优先/空闲优先）。</li>
+                      <li><b>点击</b>站点列表中的站点，地图上可以快速定位跳转。</li>
+                      <li><b>点击星标</b>关注站点，并显示在列表最上方。</li>
+                    </li>
+                    <li>颜色模式：点击右上角按钮切换颜色模式。</li>
+                    <li>快捷方式：点击 Safari 分享→添加到主屏幕，可将 ZJU Charger 快捷保存到桌面。</li>
                   </ol>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="flex flex-row flex-nowrap w-full items-center justify-between sm:justify-between gap-3 space-x-0 sm:space-x-0">
+                  <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    <Switch
+                      checked={dontShowGuide}
+                      onCheckedChange={handleGuideToggle}
+                      aria-label="不再显示说明书"
+                    />
+                    <span>不再显示</span>
+                  </div>
                   <DialogClose asChild>
-                    <Button size="sm">了解！</Button>
+                    <Button size="sm" onClick={handleGuideConfirm}>
+                      了解！
+                    </Button>
                   </DialogClose>
                 </DialogFooter>
               </DialogContent>

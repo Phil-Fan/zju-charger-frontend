@@ -1,9 +1,14 @@
 "use client";
 
+import { Navigation } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import type { GeoPoint } from "@/hooks/use-realtime-location";
+import { distanceBetween } from "@/lib/geo";
 import { cn } from "@/lib/utils";
+import type { SortMode } from "@/types/sort";
 import type { StationRecord } from "@/types/station";
 
 interface StationListProps {
@@ -13,6 +18,22 @@ interface StationListProps {
   onToggleWatch: (station: StationRecord) => void;
   isWatched: (station: StationRecord) => boolean;
   onSelectStation?: (station: StationRecord) => void;
+  userLocation?: GeoPoint | null;
+  sortMode: SortMode;
+  maxVisible?: number;
+}
+
+interface StationMeta {
+  station: StationRecord;
+  distance: number | null;
+  watched: boolean;
+}
+
+function formatDistance(distance: number | null): string | null {
+  if (distance === null) return null;
+  if (distance < 1000) return `${Math.round(distance)}m`;
+  const km = distance / 1000;
+  return `${km >= 10 ? Math.round(km) : km.toFixed(1)}km`;
 }
 
 function availabilityClass(station: StationRecord): string {
@@ -34,7 +55,104 @@ export function StationList({
   onToggleWatch,
   isWatched,
   onSelectStation,
+  userLocation,
+  sortMode,
+  maxVisible,
 }: StationListProps) {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [limitedHeight, setLimitedHeight] = useState<number | null>(null);
+
+  const stationMeta: StationMeta[] = useMemo(() => {
+    const meta = stations.map((station) => {
+      const hasCoords =
+        userLocation &&
+        typeof userLocation.longitude === "number" &&
+        typeof userLocation.latitude === "number" &&
+        station.longitude !== null &&
+        station.latitude !== null;
+      const distance =
+        hasCoords && userLocation
+          ? distanceBetween(
+              userLocation.longitude,
+              userLocation.latitude,
+              station.longitude as number,
+              station.latitude as number,
+            )
+          : null;
+      return { station, distance, watched: isWatched(station) };
+    });
+
+    const effectiveSort: SortMode =
+      sortMode === "distance" && !userLocation ? "free" : sortMode;
+
+    meta.sort((a, b) => {
+      const watchDelta = Number(b.watched) - Number(a.watched);
+      if (watchDelta !== 0) return watchDelta;
+      const fetchedDelta =
+        Number(b.station.isFetched) - Number(a.station.isFetched);
+      if (fetchedDelta !== 0) return fetchedDelta;
+
+      if (effectiveSort === "distance") {
+        const distA = a.distance ?? Number.POSITIVE_INFINITY;
+        const distB = b.distance ?? Number.POSITIVE_INFINITY;
+        if (distA !== distB) return distA - distB;
+      } else {
+        const freeDelta = b.station.free - a.station.free;
+        if (freeDelta !== 0) return freeDelta;
+      }
+
+      return a.station.name.localeCompare(b.station.name, "zh-CN");
+    });
+
+    return meta;
+  }, [stations, isWatched, userLocation, sortMode]);
+
+  useEffect(() => {
+    if (!maxVisible) {
+      setLimitedHeight(null);
+      return;
+    }
+    const container = contentRef.current;
+    if (!container) {
+      setLimitedHeight(null);
+      return;
+    }
+
+    const measure = () => {
+      if (!contentRef.current) {
+        setLimitedHeight(null);
+        return;
+      }
+      const children = Array.from(contentRef.current.children).filter(
+        (child): child is HTMLElement => child instanceof HTMLElement,
+      );
+      if (children.length === 0) {
+        setLimitedHeight(null);
+        return;
+      }
+      const slice = children.slice(0, Math.min(maxVisible, children.length));
+      const first = slice[0];
+      const last = slice[slice.length - 1];
+      const height = last.offsetTop + last.offsetHeight - first.offsetTop;
+      setLimitedHeight(Math.ceil(height));
+    };
+
+    measure();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(() => measure());
+      observer.observe(container);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [maxVisible, stationMeta.length]);
+
+  const scrollStyle = limitedHeight
+    ? { height: `${limitedHeight}px` }
+    : undefined;
+
   if (loading) {
     return (
       <div className="py-8 text-center text-muted-foreground">加载中...</div>
@@ -59,21 +177,18 @@ export function StationList({
     );
   }
 
-  const sorted = [...stations].sort((a, b) => {
-    const watchDelta = Number(isWatched(b)) - Number(isWatched(a));
-    if (watchDelta !== 0) return watchDelta;
-    const fetchedDelta = Number(b.isFetched) - Number(a.isFetched);
-    if (fetchedDelta !== 0) return fetchedDelta;
-    const freeDelta = b.free - a.free;
-    if (freeDelta !== 0) return freeDelta;
-    return a.name.localeCompare(b.name, "zh-CN");
-  });
-
   return (
-    <ScrollArea className="h-full">
-      <div className="flex flex-col gap-4 pr-4">
-        {sorted.map((station) => {
-          const watched = isWatched(station);
+    <ScrollArea
+      type="always"
+      className={cn(
+        "w-full min-h-0",
+        limitedHeight ? undefined : "h-full",
+      )}
+      style={scrollStyle}
+    >
+      <div ref={contentRef} className="flex flex-col gap-4 pr-4">
+        {stationMeta.map(({ station, distance, watched }) => {
+          const distanceLabel = formatDistance(distance);
           return (
             <div key={station.hashId} className="relative">
               <button
@@ -86,16 +201,24 @@ export function StationList({
                 )}
                 onClick={() => onSelectStation?.(station)}
               >
-                <div>
-                  <h3 className="text-base font-semibold text-card-foreground">
-                    {station.name}
-                    {!station.isFetched ? (
-                      <Badge variant="secondary" className="ml-2">
-                        未抓取
-                      </Badge>
+                <div className="flex flex-col gap-2 pr-10">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h3 className="text-base font-semibold text-card-foreground">
+                      {station.name}
+                      {!station.isFetched ? (
+                        <Badge variant="secondary" className="ml-2">
+                          未抓取
+                        </Badge>
+                      ) : null}
+                    </h3>
+                    {distanceLabel ? (
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                        <Navigation className="h-3 w-3" />
+                        {distanceLabel}
+                      </span>
                     ) : null}
-                  </h3>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <Badge variant="outline">
                       {station.campusName || "未分配校区"}
                     </Badge>

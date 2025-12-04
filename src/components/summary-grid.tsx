@@ -10,8 +10,6 @@ interface SummaryGridProps {
   onSelectCampus: (campusId: CampusId) => void;
 }
 
-const shortName = (name: string) => name.slice(0, 2);
-
 export function SummaryGrid({
   summary,
   selectedCampusId,
@@ -25,7 +23,7 @@ export function SummaryGrid({
             key={item.campusId}
             type="button"
             className={cn(
-              "flex min-w-[140px] flex-col rounded-2xl border p-4 text-left transition",
+              "flex min-w-[140px] flex-col rounded-2xl border p-3 text-left transition sm:min-w-[180px] sm:p-4",
               "bg-white text-slate-900 shadow-sm hover:shadow-md",
               "dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700",
               selectedCampusId === item.campusId
@@ -34,15 +32,14 @@ export function SummaryGrid({
             )}
             onClick={() => onSelectCampus(item.campusId)}
           >
-            <p className="text-sm font-semibold">
-              <span className="sm:hidden">{shortName(item.campusName)}</span>
-              <span className="hidden sm:inline">{item.campusName}</span>
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 sm:text-base">
+              {item.campusName}
             </p>
-            <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+            <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400 sm:mt-3 sm:text-4xl">
               {item.free}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              空闲/{item.total} 个站点
+              <span className="ml-1 text-xs font-medium text-muted-foreground sm:ml-2 sm:text-base">
+                空余
+              </span>
             </p>
           </button>
         ))}
