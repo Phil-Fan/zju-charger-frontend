@@ -40,11 +40,23 @@ interface TooltipParams {
   name?: string;
 }
 
-const buildAmapNavUrl = (station: StationRecord) =>
-  `https://uri.amap.com/navigation?to=${station.longitude},${station.latitude},${encodeURIComponent(station.name)}&mode=car&src=zju-charger`;
+const buildAmapWebUrl = (station: StationRecord) =>
+  `https://uri.amap.com/navigation?to=${station.longitude},${station.latitude},${encodeURIComponent(
+    station.name,
+  )}&mode=car&src=zju-charger`;
 
-const buildSystemNavUrl = (station: StationRecord) =>
-  `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}&travelmode=driving`;
+type Platform = "ios" | "android" | "mac" | "else";
+
+const detectPlatform = (): Platform => {
+  // 根据 UA 判断平台
+  if (typeof navigator === "undefined") return "else";
+  const ua = navigator.userAgent || "";
+  console.info("UA:", ua);
+  if (/Android/i.test(ua)) return "android"; // 安卓
+  if (/iPad|iPhone|iPod/i.test(ua)) return "ios"; // ios
+  if (/Macintosh|MacIntel/i.test(ua)) return "mac"; // 苹果电脑
+  return "else"; // 其他
+};
 
 const LIGHT_PALETTE = {
   free: "#22c55e",
@@ -63,7 +75,7 @@ function getStationColor(
   palette: typeof LIGHT_PALETTE,
 ): string {
   if (station.error > 0) return palette.error;
-  if (station.free === 0) return palette.busy;
+  if (station.free === 0) return palette.error;
   if (station.free <= 3) return palette.busy;
   return palette.free;
 }
@@ -83,11 +95,182 @@ export function MapView({
   const [amapReady, setAmapReady] = useState<boolean>(false);
   const amapKey = process.env.NEXT_PUBLIC_AMAP_KEY;
   const [navTarget, setNavTarget] = useState<StationRecord | null>(null);
+  const [pendingNavTarget, setPendingNavTarget] =
+    useState<StationRecord | null>(null);
+  const [isSwitchingNav, setIsSwitchingNav] = useState(false);
   const userMarkerRef = useRef<AMapMarker | null>(null);
+  const navSwitchTimerRef = useRef<number | null>(null);
   const palette = useMemo(
     () => (theme === "dark" ? DARK_PALETTE : LIGHT_PALETTE),
     [theme],
   );
+  const platform = useMemo(detectPlatform, []);
+
+  useEffect(() => {
+    console.info("Platform:", platform);
+  }, [platform]);
+
+  const formatCoord = useCallback(
+    (station: StationRecord) => `${station.latitude},${station.longitude}`,
+    [],
+  );
+
+  const buildAndroidGaodeIntent = (station: StationRecord) => {
+    const encodedName = encodeURIComponent(station.name);
+    return `intent://navi?sourceApplication=ZJU+Charger&poiname=${encodedName}&lat=${station.latitude}&lon=${station.longitude}&dev=0&style=2#Intent;scheme=androidamap;package=com.autonavi.minimap;category=android.intent.category.DEFAULT;end`;
+  };
+
+  const navigationConfig = useCallback(
+    (station: StationRecord, type: "gaode" | "system") => {
+      if (
+        station.latitude === null ||
+        station.longitude === null ||
+        !station.name
+      ) {
+        return null;
+      }
+      const { latitude, longitude } = station;
+      const coord = formatCoord(station);
+      if (type === "gaode") {
+        if (platform === "ios") {
+          return {
+            primary: `iosamap://navi?sourceApplication=ZJU+Charger&poiname=${encodeURIComponent(
+              station.name,
+            )}&lat=${latitude}&lon=${longitude}&dev=0&t=0`,
+            fallback: buildAmapWebUrl(station),
+          };
+        }
+        if (platform === "android") {
+          return {
+            primary: buildAndroidGaodeIntent(station),
+            fallback: `androidamap://navi?sourceApplication=ZJU+Charger&poiname=${encodeURIComponent(
+              station.name,
+            )}&lat=${latitude}&lon=${longitude}&dev=0&t=0`,
+          };
+        }
+        if (platform === "mac") {
+          return {
+            primary: `iosamap://navi?sourceApplication=ZJU+Charger&lat=${latitude}&lon=${longitude}&dev=0&t=0`,
+            fallback: buildAmapWebUrl(station),
+          };
+        }
+        return {
+          primary: buildAmapWebUrl(station),
+          fallback: buildAmapWebUrl(station),
+        };
+      }
+
+      if (type === "system") {
+        if (platform === "ios") {
+          return {
+            primary: `maps://?daddr=${coord}`,
+            fallback: `https://maps.apple.com/?daddr=${coord}`,
+          };
+        }
+        if (platform === "android") {
+          return {
+            primary: `google.navigation:q=${coord}`,
+            fallback: `https://www.google.com/maps/dir/?api=1&destination=${coord}&travelmode=driving`,
+          };
+        }
+        if (platform === "mac") {
+          return {
+            primary: `https://maps.apple.com/?daddr=${coord}`,
+            fallback: `https://maps.apple.com/?daddr=${coord}`,
+          };
+        }
+        return null;
+      }
+
+      return null;
+    },
+    [platform, formatCoord],
+  );
+
+  const attemptOpen = useCallback((primary: string, fallback?: string) => {
+    if (typeof window === "undefined") {
+      if (fallback) {
+        globalThis?.open?.(fallback, "_blank");
+      }
+      return;
+    }
+    const isHttp = /^https?:\/\//i.test(primary);
+    if (isHttp) {
+      window.open(primary, "_blank");
+      return;
+    }
+
+    let timerId: number | null = null;
+    let navIframe: HTMLIFrameElement | null = null;
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        cleanup();
+      }
+    };
+    const cleanup = () => {
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
+        timerId = null;
+      }
+      if (navIframe && document.body.contains(navIframe)) {
+        document.body.removeChild(navIframe);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    navIframe = document.createElement("iframe");
+    navIframe.style.display = "none";
+    navIframe.src = primary;
+    document.body.appendChild(navIframe);
+
+    timerId = window.setTimeout(() => {
+      cleanup();
+      if (fallback) {
+        window.open(fallback, "_blank");
+      }
+    }, 1200);
+
+    window.setTimeout(cleanup, 1500);
+  }, []);
+
+  const cancelNavTransition = useCallback(() => {
+    if (navSwitchTimerRef.current !== null) {
+      window.clearTimeout(navSwitchTimerRef.current);
+      navSwitchTimerRef.current = null;
+    }
+    setIsSwitchingNav(false);
+    setPendingNavTarget(null);
+  }, []);
+
+  const requestNavTarget = useCallback(
+    (station: StationRecord) => {
+      cancelNavTransition();
+      if (!navTarget) {
+        setNavTarget(station);
+        return;
+      }
+      if (navTarget.hashId === station.hashId) {
+        setNavTarget(station);
+        return;
+      }
+      setIsSwitchingNav(true);
+      setPendingNavTarget(station);
+      navSwitchTimerRef.current = window.setTimeout(() => {
+        setNavTarget(station);
+        setIsSwitchingNav(false);
+        setPendingNavTarget(null);
+        navSwitchTimerRef.current = null;
+      }, 220);
+    },
+    [cancelNavTransition, navTarget],
+  );
+
+  useEffect(() => {
+    return () => {
+      cancelNavTransition();
+    };
+  }, [cancelNavTransition]);
 
   const dataPoints = useMemo<MapDataPoint[]>(
     () =>
@@ -154,8 +337,6 @@ export function MapView({
         const station = payload.data?.station ?? undefined;
         const name = (params as { name?: string }).name;
         if (!station) return name ?? "";
-        const _amapLink = buildAmapNavUrl(station);
-        const _sysLink = buildSystemNavUrl(station);
         return `
           <div style="min-width: 180px">
             <strong>${station.name}</strong><br/>
@@ -217,6 +398,13 @@ export function MapView({
 
     chart.setOption(option, true);
   }, [chart, dataPoints, campusId, amapReady, theme, palette]);
+
+  const gaodeNavOption = navTarget
+    ? navigationConfig(navTarget, "gaode")
+    : null;
+  const systemNavOption = navTarget
+    ? navigationConfig(navTarget, "system")
+    : null;
 
   const getAmap = useCallback((): AMapMap | null => {
     if (!chart) return null;
@@ -303,8 +491,9 @@ export function MapView({
 
     const navTargetFromParams = (params: CallbackDataParams) => {
       const point = params as TooltipParams;
-      if (point.data?.station) {
-        setNavTarget(point.data.station);
+      const station = point.data?.station;
+      if (station) {
+        requestNavTarget(station);
       }
     };
 
@@ -313,17 +502,17 @@ export function MapView({
       const station = point.data?.station;
       if (!station) return;
       if (longPressTimer) {
-        clearTimeout(longPressTimer);
+        window.clearTimeout(longPressTimer);
       }
       longPressTimer = window.setTimeout(() => {
-        setNavTarget(station);
+        requestNavTarget(station);
         longPressTimer = null;
       }, 600);
     };
 
     const cancelLongPress = () => {
       if (longPressTimer) {
-        clearTimeout(longPressTimer);
+        window.clearTimeout(longPressTimer);
         longPressTimer = null;
       }
     };
@@ -340,7 +529,7 @@ export function MapView({
       chart.off("mouseup", cancelLongPress);
       chart.off("globalout", cancelLongPress);
     };
-  }, [chart]);
+  }, [chart, requestNavTarget]);
 
   useEffect(() => {
     const amap = getAmap();
@@ -387,31 +576,52 @@ export function MapView({
         </Button>
       </div>
       {navTarget && (
-        <div className="absolute top-4 right-4 w-72 rounded-2xl border bg-card p-4 shadow-xl">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold">导航到 {navTarget.name}</p>
+        <div className="absolute top-4 right-4 w-72 rounded-2xl border bg-card p-4 shadow-xl transition duration-200 ease-out">
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold" aria-live="polite">
+                {isSwitchingNav
+                  ? "正在切换导航..."
+                  : `导航到 ${navTarget.name}`}
+              </p>
+              {isSwitchingNav && pendingNavTarget ? (
+                <p className="text-xs text-emerald-500">
+                  切换至 {pendingNavTarget.name}
+                </p>
+              ) : null}
+            </div>
             <button
               type="button"
-              className="text-xs text-muted-foreground"
-              onClick={() => setNavTarget(null)}
+              className="h-9 w-9 rounded-xl border border-muted-foreground/40 bg-white/70 text-sm text-muted-foreground transition hover:border-emerald-400 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300"
+              onClick={() => {
+                cancelNavTransition();
+                setNavTarget(null);
+              }}
+              aria-label="关闭导航面板"
             >
               ✕
             </button>
           </div>
           <div className="flex flex-col gap-2 text-sm">
             <Button
-              onClick={() => window.open(buildAmapNavUrl(navTarget), "_blank")}
+              onClick={() =>
+                gaodeNavOption &&
+                attemptOpen(gaodeNavOption.primary, gaodeNavOption.fallback)
+              }
             >
               高德地图导航
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() =>
-                window.open(buildSystemNavUrl(navTarget), "_blank")
-              }
-            >
-              系统/Google 地图
-            </Button>
+            {systemNavOption ? (
+              <Button
+                variant="secondary"
+                className="border border-slate-300/70 bg-white/90 text-slate-900 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                onClick={() =>
+                  attemptOpen(systemNavOption.primary, systemNavOption.fallback)
+                }
+              >
+                系统导航
+              </Button>
+            ) : null}
           </div>
         </div>
       )}

@@ -5,33 +5,53 @@ import type { StationRecord } from "@/types/station";
 export interface WatchlistState {
   deviceKeys: Set<string>;
   names: Set<string>;
+  stationHashes: Set<string>;
 }
 
 function parseWatchlist(): WatchlistState {
   if (typeof window === "undefined" || typeof localStorage === "undefined") {
-    return { deviceKeys: new Set(), names: new Set() };
+    return {
+      deviceKeys: new Set(),
+      names: new Set(),
+      stationHashes: new Set(),
+    };
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.watchlist);
     if (!raw) {
-      return { deviceKeys: new Set(), names: new Set() };
+      return {
+        deviceKeys: new Set(),
+        names: new Set(),
+        stationHashes: new Set(),
+      };
     }
     const payload = JSON.parse(raw) as {
       devids?: Array<{ devid: number | string; provider: string }>;
       devdescripts?: string[];
+      station_hashes?: Array<string | number>;
     };
     const deviceKeys = new Set<string>();
     payload.devids?.forEach((item) => {
       if (!item?.devid || !item.provider) return;
       deviceKeys.add(`${item.devid}:${item.provider}`);
     });
+    const stationHashes = new Set<string>();
+    payload.station_hashes?.forEach((hash) => {
+      if (!hash) return;
+      stationHashes.add(String(hash));
+    });
     return {
       deviceKeys,
       names: new Set(payload.devdescripts || []),
+      stationHashes,
     };
   } catch (error) {
     console.warn("无法解析本地关注列表", error);
-    return { deviceKeys: new Set(), names: new Set() };
+    return {
+      deviceKeys: new Set(),
+      names: new Set(),
+      stationHashes: new Set(),
+    };
   }
 }
 
@@ -45,6 +65,7 @@ function persistWatchlist(state: WatchlistState) {
       return { devid: Number.parseInt(devid, 10) || devid, provider };
     }),
     devdescripts: Array.from(state.names),
+    station_hashes: Array.from(state.stationHashes),
     updated_at: new Date().toISOString(),
   };
   localStorage.setItem(STORAGE_KEYS.watchlist, JSON.stringify(payload));
@@ -74,6 +95,7 @@ export function useWatchlist() {
       const next: WatchlistState = {
         deviceKeys: new Set(prev.deviceKeys),
         names: new Set(prev.names),
+        stationHashes: new Set(prev.stationHashes),
       };
       const deviceKeys = station.devids.map(
         (id) => `${id}:${station.provider}`,
@@ -86,6 +108,9 @@ export function useWatchlist() {
           next.deviceKeys.delete(key);
         });
         next.names.delete(station.name);
+        if (station.hashId) {
+          next.stationHashes.delete(station.hashId);
+        }
       } else {
         if (deviceKeys.length > 0) {
           deviceKeys.forEach((key) => {
@@ -93,6 +118,9 @@ export function useWatchlist() {
           });
         } else if (station.name) {
           next.names.add(station.name);
+        }
+        if (station.hashId) {
+          next.stationHashes.add(station.hashId);
         }
       }
       return next;
@@ -107,6 +135,7 @@ export function useWatchlist() {
     () => ({
       deviceCount: state.deviceKeys.size,
       nameCount: state.names.size,
+      stationCount: state.stationHashes.size,
     }),
     [state],
   );

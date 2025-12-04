@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Filter } from "lucide-react";
 import { HeaderBar } from "@/components/header-bar";
 import { MapView } from "@/components/map-view";
 import { NightNotice } from "@/components/night-notice";
@@ -30,7 +31,7 @@ export default function HomePage() {
   const [autoSelectionDone, setAutoSelectionDone] = useState(false);
   const { height: windowHeight } = useWindowSize();
   const { providers } = useProviders();
-  const { watchlist, isWatched, toggleWatch } = useWatchlist();
+  const { counts, isWatched, toggleWatch } = useWatchlist();
   const stationsState = useStations(
     providerId === ALL_PROVIDERS ? "" : providerId,
     campusId,
@@ -52,10 +53,7 @@ export default function HomePage() {
 
   useAutoRefresh(handleRefresh, refreshInterval);
 
-  const watchlistCount = useMemo(
-    () => watchlist.deviceKeys.size + watchlist.names.size,
-    [watchlist],
-  );
+  const watchlistCount = counts.stationCount;
 
   const handleCampusSelect = useCallback((id: CampusId) => {
     setAutoSelectionDone(true);
@@ -155,11 +153,17 @@ export default function HomePage() {
                   关注 {watchlistCount} 个站点
                 </p>
               </div>
-              <ProviderSelect
-                providerId={providerId}
-                providers={providers}
-                onChange={setProviderId}
-              />
+              <div className="flex items-center gap-1">
+                <Filter
+                  className="h-4 w-4 text-muted-foreground"
+                  aria-label="筛选"
+                />
+                <ProviderSelect
+                  providerId={providerId}
+                  providers={providers}
+                  onChange={setProviderId}
+                />
+              </div>
             </div>
             <div className="py-3">
               <NightNotice />

@@ -123,12 +123,19 @@ export function normalizeStation(
 export function mergeStations(
   liveStations: RawStation[],
   metadataStations: RawStation[],
+  providerFilter?: string,
 ): StationRecord[] {
   const merged: StationRecord[] = [];
   const seen = new Set<string>();
 
+  const shouldInclude = (record: StationRecord) => {
+    if (!providerFilter) return true;
+    return record.provider === providerFilter;
+  };
+
   liveStations.forEach((station) => {
     const normalized = normalizeStation(station, { fetched: true });
+    if (!shouldInclude(normalized)) return;
     if (!normalized.hashId) return;
     seen.add(normalized.hashId);
     merged.push(normalized);
@@ -139,6 +146,7 @@ export function mergeStations(
       { ...station, free: station.free ?? 0, total: station.total ?? 0 },
       { fetched: false },
     );
+    if (!shouldInclude(normalized)) return;
     if (!normalized.hashId || seen.has(normalized.hashId)) {
       return;
     }

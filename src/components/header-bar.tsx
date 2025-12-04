@@ -1,8 +1,19 @@
 "use client";
 
-import { Github, Mail, Moon, Sun } from "lucide-react";
+import { BookOpen, Github, Mail, Moon, Sun } from "lucide-react";
 import Image from "next/image";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { formatTimestamp } from "@/lib/time";
 
 interface HeaderBarProps {
@@ -16,6 +27,7 @@ export function HeaderBar({
   onToggleTheme,
   theme,
 }: HeaderBarProps) {
+  const [manualOpen, setManualOpen] = useState(false);
   return (
     <header className="rounded-2xl border bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -50,11 +62,44 @@ export function HeaderBar({
             </a>
             <a
               href="mailto:hw.phil.fan@gmail.com"
-              className="rounded-full border border-muted-foreground/40 p-2 text-muted-foreground transition hover:bg-muted-foreground/10"
+              className="rounded-full border border-muted-foreground/40 p-2 text-muted-foreground transition hover:bg-muted-foreground/10 dark:border-muted-foreground/40 dark:text-muted-foreground"
               aria-label="Email"
             >
               <Mail className="h-4 w-4" />
             </a>
+            <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full border border-muted-foreground/40 p-2 text-muted-foreground transition hover:bg-muted-foreground/10 dark:border-muted-foreground/40 dark:text-muted-foreground"
+                  aria-label="使用说明书"
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="space-y-4" hideCloseButton>
+                <DialogHeader>
+                  <DialogTitle>使用说明书</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <ol className="space-y-2 list-decimal pl-5">
+                    <li>点击校区卡片切换校区，点击服务商列表可以筛选服务商。</li>
+                    <li>长按或双击地图上到站点进入导航面板。</li>
+                    <li>站点列表点击星标关注站点。</li>
+                    <li>点击右上角按钮切换颜色模式。</li>
+                    <li>
+                      点击 Safari 分享 - 添加到主屏幕可以将站点添加到桌面。
+                    </li>
+                  </ol>
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button size="sm">了解！</Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
           <Button
             variant="secondary"

@@ -72,82 +72,89 @@ export function StationList({
   return (
     <ScrollArea className="h-full">
       <div className="flex flex-col gap-4 pr-4">
-        {sorted.map((station) => (
-          <div key={station.hashId} className="relative">
-            <button
-              type="button"
-              className={cn(
-                "group flex w-full cursor-pointer flex-col rounded-2xl border p-4 pr-16 text-left shadow-sm transition",
-                "bg-white border-slate-100 hover:shadow-md",
-                "dark:bg-slate-900 dark:border-slate-700 dark:shadow-[0_0_0_1px_rgba(15,23,42,0.7)] dark:hover:bg-slate-900/95",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
-              )}
-              onClick={() => onSelectStation?.(station)}
-            >
-              <div>
-                <h3 className="text-base font-semibold text-card-foreground">
-                  {station.name}
-                  {!station.isFetched ? (
-                    <Badge variant="secondary" className="ml-2">
-                      未抓取
+        {sorted.map((station) => {
+          const watched = isWatched(station);
+          return (
+            <div key={station.hashId} className="relative">
+              <button
+                type="button"
+                className={cn(
+                  "group flex w-full cursor-pointer flex-col rounded-2xl border p-4 pr-16 text-left shadow-sm transition",
+                  "bg-white border-slate-100 hover:shadow-md",
+                  "dark:bg-slate-900 dark:border-slate-700 dark:shadow-[0_0_0_1px_rgba(15,23,42,0.7)] dark:hover:bg-slate-900/95",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
+                )}
+                onClick={() => onSelectStation?.(station)}
+              >
+                <div>
+                  <h3 className="text-base font-semibold text-card-foreground">
+                    {station.name}
+                    {!station.isFetched ? (
+                      <Badge variant="secondary" className="ml-2">
+                        未抓取
+                      </Badge>
+                    ) : null}
+                  </h3>
+                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <Badge variant="outline">
+                      {station.campusName || "未分配校区"}
                     </Badge>
-                  ) : null}
-                </h3>
-                <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <Badge variant="outline">
-                    {station.campusName || "未分配校区"}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className="border-purple-200 text-purple-700 dark:border-purple-700 dark:text-purple-200"
-                  >
-                    {station.provider}
-                  </Badge>
+                    <Badge
+                      variant="outline"
+                      className="border-purple-200 text-purple-700 dark:border-purple-700 dark:text-purple-200"
+                    >
+                      {station.provider}
+                    </Badge>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-                <span
-                  className={cn("font-semibold", availabilityClass(station))}
-                >
-                  空闲 {station.free}
+                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                  <span
+                    className={cn("font-semibold", availabilityClass(station))}
+                  >
+                    空闲 {station.free}
+                  </span>
+                  <span className="text-muted-foreground">
+                    占用 {station.used}
+                  </span>
+                  <span className="text-muted-foreground">
+                    故障 {station.error}
+                  </span>
+                  <span className="text-muted-foreground">
+                    总数 {station.total}
+                  </span>
+                </div>
+                <div className="mt-3 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-[var(--charger-free)]"
+                    style={{ width: progressWidth(station) }}
+                  />
+                </div>
+              </button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl shadow-sm transition focus-visible:ring-2",
+                  "dark:bg-slate-800",
+                  watched
+                    ? "text-amber-400 hover:text-amber-300 focus-visible:ring-amber-400/60 focus-visible:text-amber-300"
+                    : "text-slate-400 hover:text-amber-300 focus-visible:ring-slate-400/50 focus-visible:text-slate-400",
+                )}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleWatch(station);
+                }}
+                aria-label={watched ? "取消关注" : "关注该站点"}
+                aria-pressed={watched}
+              >
+                <span aria-hidden>★</span>
+                <span className="sr-only">
+                  {watched ? "已关注" : "标记为关注"}
                 </span>
-                <span className="text-muted-foreground">
-                  占用 {station.used}
-                </span>
-                <span className="text-muted-foreground">
-                  故障 {station.error}
-                </span>
-                <span className="text-muted-foreground">
-                  总数 {station.total}
-                </span>
-              </div>
-              <div className="mt-3 h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800">
-                <div
-                  className="h-full rounded-full bg-[var(--charger-free)]"
-                  style={{ width: progressWidth(station) }}
-                />
-              </div>
-            </button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "absolute right-3 top-3 rounded-full bg-white text-xl shadow-sm transition",
-                "dark:bg-slate-800",
-                isWatched(station)
-                  ? "text-amber-400"
-                  : "text-slate-400 hover:text-amber-300",
-              )}
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggleWatch(station);
-              }}
-              aria-label={isWatched(station) ? "取消关注" : "关注该站点"}
-            >
-              ★
-            </Button>
-          </div>
-        ))}
+              </Button>
+            </div>
+          );
+        })}
       </div>
     </ScrollArea>
   );

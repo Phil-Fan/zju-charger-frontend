@@ -49,6 +49,7 @@ export function useStations(
       const merged = mergeStations(
         status.stations || [],
         metadata.stations || [],
+        providerId || undefined,
       );
       setStations(merged);
       setUpdatedAt(status.updated_at || metadata.updated_at);
