@@ -65,7 +65,12 @@ export default function HomePage() {
   const summarySectionRef = useRef<HTMLDivElement | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
   const [chromeHeight, setChromeHeight] = useState(0);
-  const { point: userLocation, watching, start, stop } = useRealtimeLocation({
+  const {
+    point: userLocation,
+    watching,
+    start,
+    stop,
+  } = useRealtimeLocation({
     onError: (message) => toast.error(message),
   });
 
@@ -147,7 +152,10 @@ export default function HomePage() {
       : MOBILE_MAP_MIN_HEIGHT;
   const desktopPanelHeight =
     windowHeight > 0
-      ? Math.max(Math.floor(windowHeight - chromeHeight), DESKTOP_PANEL_MIN_HEIGHT)
+      ? Math.max(
+          Math.floor(windowHeight - chromeHeight),
+          DESKTOP_PANEL_MIN_HEIGHT,
+        )
       : DESKTOP_PANEL_MIN_HEIGHT;
 
   const updateChromeHeight = useCallback(() => {
@@ -164,8 +172,9 @@ export default function HomePage() {
           })()
         : 0;
     const gap =
-      (windowWidth >= DESKTOP_BREAKPOINT ? DESKTOP_SECTION_GAP : MOBILE_SECTION_GAP) *
-      2;
+      (windowWidth >= DESKTOP_BREAKPOINT
+        ? DESKTOP_SECTION_GAP
+        : MOBILE_SECTION_GAP) * 2;
     setChromeHeight(headerHeight + summaryHeight + padding + gap);
   }, [windowWidth]);
 

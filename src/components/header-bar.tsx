@@ -113,19 +113,37 @@ export function HeaderBar({
                 </DialogHeader>
                 <div className="space-y-3 text-sm text-muted-foreground">
                   <ol className="space-y-2 list-decimal pl-5">
-                    <li>校区卡片：点击<b>校区卡片</b>即可切换校区。</li>
-                    <li>地图：在地图站点上可通过<b>长按或双击</b>选择导航。</li>
-                    <li>站点列表：
+                    <li>
+                      校区卡片：点击<b>校区卡片</b>即可切换校区。
+                    </li>
+                    <li>
+                      地图：在地图站点上可通过<b>长按或双击</b>选择导航。
+                    </li>
+                    <li>
+                      站点列表：
                       <ul>
-                        <li>可点击列表中的<b>筛选</b>按钮选择服务商，并按<b>距离优先</b>或<b>空闲优先</b>排序。</li>
-                        <li>点击列表中的<b>站点</b>，地图将快速定位到对应位置。</li>
-                        <li>点击<b>星标</b>关注站点，关注的站点会显示在列表顶部。</li>
+                        <li>
+                          可点击列表中的<b>筛选</b>按钮选择服务商，并按
+                          <b>距离优先</b>或<b>空闲优先</b>排序。
+                        </li>
+                        <li>
+                          点击列表中的<b>站点</b>，地图将快速定位到对应位置。
+                        </li>
+                        <li>
+                          点击<b>星标</b>关注站点，关注的站点会显示在列表顶部。
+                        </li>
                       </ul>
                     </li>
                     <li>颜色模式：点击右上角按钮可切换明亮/暗色模式。</li>
-                    <li>快捷方式：在 Safari 中通过“分享 → 添加到主屏幕”可创建快捷方式。</li>
+                    <li>
+                      快捷方式：在 Safari 中通过“分享 →
+                      添加到主屏幕”可创建快捷方式。
+                    </li>
                     <li>实时定位默认开启，可通过地图右下角按钮关闭。</li>
-                    <li>本站仅用于学习与交流，不收集任何个人信息。使用本网站即表示同意<b>使用过程中出现的任何问题由使用者自行承担</b>。</li>
+                    <li>
+                      本站仅用于学习与交流，不收集任何个人信息。使用本网站即表示同意
+                      <b>使用过程中出现的任何问题由使用者自行承担</b>。
+                    </li>
                   </ol>
                 </div>
                 <DialogFooter className="flex flex-row flex-nowrap w-full items-center justify-between sm:justify-between gap-3 space-x-0 sm:space-x-0">

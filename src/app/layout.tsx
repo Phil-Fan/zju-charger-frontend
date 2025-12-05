@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
 import { ClarityScript } from "@/components/clarity";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
-  title: "ZJU Charger 前端",
-  description: "浙江大学电桩状态地图（Next.js 版）",
+  title: "ZJU Charger",
+  description: "便捷高效的充电桩查询助手",
 };
 
 export default function RootLayout({
