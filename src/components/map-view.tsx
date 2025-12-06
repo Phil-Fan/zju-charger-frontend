@@ -16,7 +16,11 @@ import { Button } from "@/components/ui/button";
 import type { GeoPoint } from "@/hooks/use-realtime-location";
 import { type AMapMap, type AMapMarker, loadAmap } from "@/lib/amap";
 import { AMAP_DEFAULT_CENTER, CAMPUS_MAP } from "@/lib/config";
-import { isSpecialStation, SPECIAL_STATION_COLORS } from "@/lib/station-style";
+import {
+  isBatterySwapProvider,
+  isSpecialStation,
+  SPECIAL_STATION_COLORS,
+} from "@/lib/station-style";
 import { cn } from "@/lib/utils";
 import type { CampusId, StationRecord } from "@/types/station";
 
@@ -32,10 +36,13 @@ interface MapViewProps {
   trackingHighlight?: boolean;
 }
 
+type StationSymbol = Extract<ScatterSeriesOption["symbol"], string>;
+
 interface MapDataPoint {
   name: string;
   value: [number, number, number, number];
   station: StationRecord;
+  symbol: StationSymbol;
 }
 
 interface TooltipParams {
@@ -78,6 +85,9 @@ const DARK_PALETTE = {
   special: SPECIAL_STATION_COLORS.dark,
 };
 
+const BATTERY_SWAP_SYMBOL: StationSymbol = "rect";
+const DEFAULT_SYMBOL: StationSymbol = "circle";
+
 function getStationColor(
   station: StationRecord,
   palette: typeof LIGHT_PALETTE,
@@ -87,6 +97,12 @@ function getStationColor(
   if (station.free === 0) return palette.error;
   if (station.free <= 3) return palette.busy;
   return palette.free;
+}
+
+function getStationSymbol(station: StationRecord): StationSymbol {
+  return isBatterySwapProvider(station.provider)
+    ? BATTERY_SWAP_SYMBOL
+    : DEFAULT_SYMBOL;
 }
 
 function createUserMarkerElement() {
@@ -319,6 +335,7 @@ export function MapView({
             station.total,
           ],
           station,
+          symbol: getStationSymbol(station),
         })),
     [stations],
   );
@@ -387,10 +404,13 @@ export function MapView({
       data: dataPoints,
       symbolSize: (rawParams: CallbackDataParams) => {
         const params = rawParams as TooltipParams;
-        const free = params.data?.station?.free ?? 0;
-        if (free > 8) return 30;
-        if (free > 4) return 26;
-        return 22;
+        const station = params.data?.station;
+        const free = station?.free ?? 0;
+        const baseSize = free > 8 ? 30 : free > 4 ? 26 : 22;
+        if (params.data?.symbol === BATTERY_SWAP_SYMBOL) {
+          return [baseSize-2, baseSize-2];
+        }
+        return baseSize;
       },
       itemStyle: {
         color: (rawParams: CallbackDataParams) => {
