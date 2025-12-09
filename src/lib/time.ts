@@ -11,7 +11,7 @@ export function formatTimestamp(
   const hh = String(date.getHours()).padStart(2, "0");
   const mi = String(date.getMinutes()).padStart(2, "0");
   const ss = String(date.getSeconds()).padStart(2, "0");
-  const prefix = language === "en" ? "Updated at" : "更新于";
+  const prefix = language === "en" ? "At" : "更新于";
   return `${prefix} ${hh}:${mi}:${ss}`;
 }
 
