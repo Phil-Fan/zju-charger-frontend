@@ -55,7 +55,3 @@ export interface StationsResponse {
   updated_at?: string;
   stations: RawStation[];
 }
-
-export interface ConfigResponse {
-  fetch_interval?: number;
-}

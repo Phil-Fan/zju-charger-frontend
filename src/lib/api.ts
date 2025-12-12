@@ -2,7 +2,6 @@ import { CAMPUS_MAP } from "@/lib/config";
 import { ensureGcj02 } from "@/lib/geo";
 import type {
   CampusId,
-  ConfigResponse,
   ProviderInfo,
   RawStation,
   StationRecord,
@@ -47,11 +46,6 @@ function withBase(path: string) {
 
 export async function fetchProviders() {
   return request<ProviderInfo[]>(withBase("/api/providers"));
-}
-
-export async function fetchConfig(): Promise<number> {
-  const data = await request<ConfigResponse>(withBase("/api/config"));
-  return data.fetch_interval ?? 60;
 }
 
 export async function fetchStatus(provider?: string): Promise<StatusResponse> {
